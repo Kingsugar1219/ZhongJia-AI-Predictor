@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import pandas as pd
 import requests
@@ -16,7 +17,7 @@ st.set_page_config(page_title="中甲 AI 预测系统", page_icon="⚽", layout=
 class FootballPredictorNN(nn.Module):
     def __init__(self):
         super(FootballPredictorNN, self).__init__()
-        # 我们输入 6 个特征 (主队进球/失球/积分, 客队进球/失球/积分)
+        # 输入 6 个特征 (主进球/失球/积分, 客进球/失球/积分)
         self.layer1 = nn.Linear(6, 16)
         self.relu = nn.ReLU()
         self.layer2 = nn.Linear(16, 8)
@@ -31,14 +32,29 @@ class FootballPredictorNN(nn.Module):
         out = self.output_layer(out)
         return out
 
-# 实例化 AI 大脑并设置为考试模式
-model = FootballPredictorNN()
-model.eval()
+# ==========================================
+# 2. 工业级模型加载方案 (带缓存与 UI 状态指示灯)
+# ==========================================
+@st.cache_resource
+def load_ai_brain():
+    brain = FootballPredictorNN()
+    # 检查云端目录下到底有没有这个权重文件
+    if os.path.exists("zhongjia_brain.pth"):
+        try:
+            # 尝试注入训练好的权重
+            brain.load_state_dict(torch.load("zhongjia_brain.pth", weights_only=False))
+            status_msg = "✅ [系统状态] 历史智慧大脑已成功连接！"
+        except Exception as e:
+            status_msg = f"❌ [系统状态] 大脑文件损坏或版本不符：{e}"
+    else:
+        status_msg = "⚠️ [系统状态] 未检测到 zhongjia_brain.pth 文件，当前为随机瞎猜状态！"
+    
+    brain.eval()
+    return brain, status_msg
 
 # ==========================================
-# 2. 智能获取实时数据 (自动抓取 + 缓存双保险)
+# 3. 智能获取实时数据 (自动抓取 + 缓存双保险)
 # ==========================================
-# ttl=3600: 每一个小时才会真正在后台去抓取一次，其余时间秒开网页，绝对防封号！
 @st.cache_data(ttl=3600, show_spinner="🕵️‍♂️ 正在潜入后台自动同步中甲最新实时数据...") 
 def load_latest_data():
     api_url = "https://www.dongqiudi.com/sport-data/soccer/biz/data/standing?season_id=26350&app=dqd&version=0&platform=web&language=zh-cn&app_type="
@@ -50,38 +66,40 @@ def load_latest_data():
     }
     
     try:
-        # 尝试去拉取最新数据
         response = requests.get(api_url, headers=headers, timeout=10)
         if response.status_code == 200:
             json_data = response.json()
             true_team_data = json_data['content']['rounds'][0]['content']['data']
             latest_df = pd.DataFrame(true_team_data)
-            
-            # 将最新数据保存一份到相对路径，作为断网时的保底备份
             latest_df.to_csv("zhongjia_real_data.csv", index=False, encoding='utf-8-sig')
             return latest_df
         else:
-            # 接口拒绝访问时，使用备胎数据
             st.toast("⚠️ 实时接口暂不可用，正在使用最近一次的备份数据。")
             return pd.read_csv("zhongjia_real_data.csv")
-            
     except Exception:
-        # 网络超时或报错时，同样使用备胎数据防止网站崩溃
         st.toast("🔌 网络产生延迟，正在使用本地备份数据进行推演。")
         return pd.read_csv("zhongjia_real_data.csv")
 
 # ==========================================
-# 3. 网页主视觉与 UI 交互
+# 4. 网页主视觉与 UI 交互
 # ==========================================
 st.title("⚽ 中甲联赛 AI 胜率预测系统")
 st.write("🧠 基于 PyTorch 深度学习框架 | 📡 全自动无感同步最新赛事数据")
+
+# 加载模型并打印状态灯（直接显示在标题下方）
+model, load_status = load_ai_brain()
+if "✅" in load_status:
+    st.success(load_status)
+elif "❌" in load_status:
+    st.error(load_status)
+else:
+    st.warning(load_status)
+
 st.divider()
 
 try:
-    # 直接调用函数，如果缓存没过期瞬间返回，过期了自动后台抓取
+    # 获取数据
     df = load_latest_data()
-    
-    # 提取所有球队的名字供下拉菜单使用
     team_names = df['team_name'].tolist()
     
     # 选择对抗球队
@@ -98,15 +116,16 @@ try:
         home_stats = df[df['team_name'] == home_team].iloc[0]
         away_stats = df[df['team_name'] == away_team].iloc[0]
 
-       # 在网页上展示当前的数据对比
+        # 赛前数据看板 (恢复为你要求的纯文本排版)
         st.subheader(f"📊 赛前数据对比：{home_team} VS {away_team}")
         st.write(f"**{home_team} (主)**: 当前积分 {home_stats['points']} | 进球 {home_stats['goals_pro']} | 失球 {home_stats['goals_against']}")
         st.write(f"**{away_team} (客)**: 当前积分 {away_stats['points']} | 进球 {away_stats['goals_pro']} | 失球 {away_stats['goals_against']}")
         
+        st.write("") # 留白
+        
         # ==========================================
-        # 4. 核心引擎：触发 PyTorch 计算
+        # 5. 核心引擎：触发 PyTorch 计算
         # ==========================================
-        # use_container_width=True 让按钮填满屏幕宽度，更好看
         if st.button("🔮 启动 AI 战术推演引擎", type="primary", use_container_width=True):
             with st.spinner("🧠 神经网络正在计算特征权重..."):
                 
@@ -126,11 +145,10 @@ try:
                 prob_draw = probabilities[1] * 100
                 prob_home = probabilities[2] * 100
                 
-                # 展示高光预测结果
+                # 展示预测结果
                 st.divider()
                 st.subheader("🏆 AI 终极预测结果")
                 
-                # 三个大卡片展示概率
                 res_col1, res_col2, res_col3 = st.columns(3)
                 with res_col1:
                     st.success(f"🟢 **主胜概率**\n\n### {prob_home:.1f}%")
@@ -138,8 +156,6 @@ try:
                     st.warning(f"🟡 **平局概率**\n\n### {prob_draw:.1f}%")
                 with res_col3:
                     st.error(f"🔴 **客胜概率**\n\n### {prob_away:.1f}%")
-                
-                st.caption("注：当前预测基于 PyTorch 初始化模型状态。未来接入历史回放数据完成深度训练后，预测精度将大幅提升！")
 
 except Exception as e:
     st.error(f"❌ 系统初始化遇到了一点小阻碍，可能缺少必要的底层数据文件。错误报告：{e}")

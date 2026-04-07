@@ -98,16 +98,10 @@ try:
         home_stats = df[df['team_name'] == home_team].iloc[0]
         away_stats = df[df['team_name'] == away_team].iloc[0]
 
-        # 赛前数据看板
-        st.subheader(f"📊 赛前状态对比")
-        
-        # 使用 metrics 展示数据更直观
-        m_col1, m_col2, m_col3 = st.columns(3)
-        m_col1.metric(label=f"🏠 {home_team} 积分", value=home_stats['points'])
-        m_col2.metric(label="⚔️ 进球对比 (主 VS 客)", value=f"{home_stats['goals_pro']} : {away_stats['goals_pro']}")
-        m_col3.metric(label=f"✈️ {away_team} 积分", value=away_stats['points'])
-        
-        st.write("") # 留点空白
+       # 在网页上展示当前的数据对比
+        st.subheader(f"📊 赛前数据对比：{home_team} VS {away_team}")
+        st.write(f"**{home_team} (主)**: 当前积分 {home_stats['points']} | 进球 {home_stats['goals_pro']} | 失球 {home_stats['goals_against']}")
+        st.write(f"**{away_team} (客)**: 当前积分 {away_stats['points']} | 进球 {away_stats['goals_pro']} | 失球 {away_stats['goals_against']}")
         
         # ==========================================
         # 4. 核心引擎：触发 PyTorch 计算

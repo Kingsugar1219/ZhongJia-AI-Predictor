@@ -36,7 +36,7 @@ model.eval()
 @st.cache_data 
 def load_data():
     # 注意：确保这个路径和你的 csv 文件路径完全一致！
-    return pd.read_csv("W:/Desktop/文件/001/zhongjia_real_data.csv")
+    return pd.read_csv("zhongjia_real_data.csv")
 
 st.title("⚽ 中甲联赛 AI 胜率预测系统")
 
